@@ -1,19 +1,26 @@
 import streamlit as st
-import requests
-import json
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
 
+# Load the .env file
 load_dotenv()
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+GROQ_API_KEY = os.getenv("RAPIDAPI_KEY")
 
-API_URL = "https://grok-2-by-xai.p.rapidapi.com/"
-HEADERS = {
-    "x-rapidapi-key": RAPIDAPI_KEY,
-    "x-rapidapi-host": "grok-2-by-xai.p.rapidapi.com",
-    "Content-Type": "application/json"
-}
+# Initialize Groq OpenAI-compatible client
+client = OpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1"  # ✅ Corrected base_url
+)
 
+# Use exact model names from Groq
+MODEL_OPTIONS = [
+    "meta-llama/llama-3-8b-instruct",
+    "meta-llama/llama-3-70b-instruct",
+    "meta-llama/llama-4-scout-17b-16e-instruct"
+]
+
+# Personality prompts
 PERSONALITIES = {
     "Math Teacher": "You are a helpful Math Teacher. Only answer math-related questions. Politely decline other topics.",
     "Doctor": "You are a professional doctor. Only provide health and medical information. Politely refuse other topics.",
@@ -22,51 +29,50 @@ PERSONALITIES = {
     "Tech Support": "You are a tech support assistant. Only help with software, devices, or tech problems."
 }
 
+# Streamlit UI
 st.set_page_config(page_title="Groq Chatbot", layout="centered")
 st.title("💬 Groq Chatbot with Personalities")
 
-# Sidebar
-selected_model = st.sidebar.selectbox("Select Groq Model", ["Grok-2"])
+# Sidebar: model and personality selection
+selected_model = st.sidebar.selectbox("Select Groq Model", MODEL_OPTIONS)
 selected_persona = st.sidebar.selectbox("Choose a Personality", list(PERSONALITIES.keys()))
 
-# Chat history (session state)
-if "messages" not in st.session_state:
+# Initialize conversation
+if "messages" not in st.session_state or st.session_state.get("persona") != selected_persona:
     st.session_state.messages = [
         {"role": "system", "content": PERSONALITIES[selected_persona]}
     ]
-# Display messages
+    st.session_state.persona = selected_persona
+
+# Display chat history
 for msg in st.session_state.messages[1:]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Input field
+# User input
 user_input = st.chat_input("Type your message...")
 
 if user_input:
     # Show user message
     with st.chat_message("user"):
         st.markdown(user_input)
-
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Prepare request
-    payload = {
-        "model": selected_model,
-        "temperature": 1,
-        "max_tokens": 2048,
-        "messages": st.session_state.messages
-    }
-
     try:
-        response = requests.post(API_URL, headers=HEADERS, data=json.dumps(payload))
-        data = response.json()
-        ai_message = data["choices"][0]["message"]["content"]
+        # Call Groq model
+        response = client.chat.completions.create(
+            model=selected_model,
+            messages=st.session_state.messages,
+            temperature=1
+        )
+
+        ai_message = response.choices[0].message.content
+
+        # Show assistant message
+        with st.chat_message("assistant"):
+            st.markdown(ai_message)
+
+        st.session_state.messages.append({"role": "assistant", "content": ai_message})
 
     except Exception as e:
-        ai_message = f"❌ Error: {e}"
-
-    # Show assistant reply
-    with st.chat_message("assistant"):
-        st.markdown(ai_message)
-
-    st.session_state.messages.append({"role": "assistant", "content": ai_message})
+        st.error(f"❌ Error: {e}")
