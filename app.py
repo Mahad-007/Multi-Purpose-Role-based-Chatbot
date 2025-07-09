@@ -4,8 +4,10 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load the .env file
-load_dotenv()
-GROQ_API_KEY = os.getenv("RAPIDAPI_KEY")
+
+
+GROQ_API_KEY = st.secrets["RAPIDAPI_KEY"]
+
 
 # Initialize Groq OpenAI-compatible client
 client = OpenAI(
